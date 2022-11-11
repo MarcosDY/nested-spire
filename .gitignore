@@ -1,0 +1,5 @@
+shared/
+agent-cacert.pem
+agent.crt.pem
+agent.key.pem
+bootstrap.crt

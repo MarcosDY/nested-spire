@@ -1,0 +1,69 @@
+version: '3'
+services:
+  # Root
+  root-server:
+    image: spire-server:latest-local
+    hostname: root-server
+    volumes:
+      - ./root/server:/opt/spire/conf/server
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+  root-agent:
+    # Share the host pid namespace so this agent can attest the intermediate servers
+    pid: "host"
+    image: spire-agent:latest-local
+    depends_on: ["root-server"]
+    hostname: root-agent
+    volumes:
+      # Share root agent socket to be acceded by leaf server
+      - ./shared/rootSocket:/opt/spire/sockets
+      - ./root/agent:/opt/spire/conf/agent
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["-config", "/opt/spire/conf/agent/agent.conf"]
+  intermediate-server:
+    # Share the host pid namespace so this server can be attested by the root agent
+    pid: "host"
+    image: spire-server:latest-local
+    hostname: intermediate-server
+    labels:
+      # label to attest server against root-agent
+      - org.integration.name=intermediate
+    depends_on: ["root-server","root-agent"]
+    volumes:
+      # Add root agent socket
+      - ./shared/rootSocket:/opt/spire/sockets
+      - ./intermediate/server:/opt/spire/conf/server
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+  intermediate-agent:
+    # Share the host pid namespace so this agent can attest the leaf server
+    pid: "host"
+    image: spire-agent:latest-local
+    hostname: intermediate-agent
+    depends_on: ["intermediate-server"]
+    volumes:
+      - ./intermediate/agent:/opt/spire/conf/agent
+      # Share intermediate agent socket to be acceded by leaf server
+      - ./shared/intermediateSocket:/opt/spire/sockets
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["-config", "/opt/spire/conf/agent/agent.conf"]
+  # LeafA
+  leaf-server:
+    # Share the host pid namespace so this server can be attested by the intermediate agent
+    pid: "host"
+    image: spire-server:latest-local
+    hostname: leaf-server
+    labels:
+      # Label to attest server against intermediate-agent
+      - org.integration.name=leaf
+    depends_on: ["intermediate-server","intermediate-agent"]
+    volumes:
+      # Add intermediatA agent socket
+      - ./shared/intermediateSocket:/opt/spire/sockets
+      - ./leaf/server:/opt/spire/conf/server
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+  leaf-agent:
+    image: spire-agent:latest-local
+    hostname: leaf-agent
+    depends_on: ["intermediate-server"]
+    volumes:
+      - ./leaf/agent:/opt/spire/conf/agent
+    command: ["-config", "/opt/spire/conf/agent/agent.conf"]
