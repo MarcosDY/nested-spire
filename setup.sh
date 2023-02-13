@@ -123,12 +123,16 @@ docker-compose exec -T intermediate-server \
 
 check-synced-entry "intermediate-agent" "spiffe://domain.test/leaf"
 
+log-debug "creating intermediate test user..."
+# docker-compose exec -T intermediate-server adduser -S -u 1000 intermediateUser
+docker-compose exec -T intermediate-agent adduser intermediateUser -G root -S
+
 log-debug "creating intermediate workload..."
 docker-compose exec -T intermediate-server \
     /opt/spire/bin/spire-server entry create \
     -parentID "spiffe://domain.test/spire/agent/x509pop/$(fingerprint intermediate/agent/agent.crt.pem)" \
     -spiffeID "spiffe://domain.test/intermediate/workload" \
-    -selector "unix:uid:0" 
+    -selector "unix:user:intermediateUser" 
 
 log-debug "Starting leaf-server.."
 docker-up leaf-server
@@ -140,9 +144,13 @@ docker-compose exec -T leaf-server \
 log-debug "Starting leaf-agent..."
 docker-up leaf-agent
 
+log-debug "creating leaf test user..."
+# docker-compose exec -T intermediate-server adduser -S -u 1000 leafUser
+docker-compose exec -T leaf-agent adduser leafUser -G root -S
+
 # log-debug "creating leaf workload..."
 docker-compose exec -T leaf-server \
     /opt/spire/bin/spire-server entry create \
     -parentID "spiffe://domain.test/spire/agent/x509pop/$(fingerprint leaf/agent/agent.crt.pem)" \
     -spiffeID "spiffe://domain.test/leaf/workload" \
-    -selector "unix:uid:0" 
+    -selector "unix:user:leafUser" 
